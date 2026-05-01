@@ -3,6 +3,8 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build-test-push:
@@ -13,9 +15,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -23,8 +26,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run tests
-        id: tests
-        run: pytest tests/ --tb=short
+        run: python -m pytest tests/ --tb=short
 
       - name: Log in to Docker Hub
         if: success()
@@ -35,22 +37,32 @@ jobs:
 
       - name: Build Docker image
         if: success()
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/cicd-pipeline:latest .
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/cicd-pipeline:latest .
 
       - name: Push Docker image
         if: success()
-        run: docker push ${{ secrets.DOCKER_USERNAME }}/cicd-pipeline:latest
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/cicd-pipeline:latest
 
-      - name: Notify Telegram — success
+      - name: Notify Telegram - success
         if: success()
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="✅ Pipeline PASSED%0Arepo: ${{ github.repository }}%0Abranch: ${{ github.ref_name }}%0Acommit: ${{ github.sha }}"
+          -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d text="✅ CI/CD Pipeline PASSED!
+          Repo: ${{ github.repository }}
+          Branch: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          Docker image pushed to Docker Hub successfully!"
 
-      - name: Notify Telegram — failure
+      - name: Notify Telegram - failure
         if: failure()
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="❌ Pipeline FAILED%0Arepo: ${{ github.repository }}%0Abranch: ${{ github.ref_name }}%0Acommit: ${{ github.sha }}"
+          -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d text="❌ CI/CD Pipeline FAILED!
+          Repo: ${{ github.repository }}
+          Branch: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          Please check GitHub Actions for details."
